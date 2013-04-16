@@ -13,8 +13,12 @@ TEMPLATE = app
 
 
 SOURCES += main.cpp\
-        mainwindow.cpp
+        mainwindow.cpp \
+    pmgphotocommandthread.cpp
 
-HEADERS  += mainwindow.h
+HEADERS  += mainwindow.h \
+    pmgphotocommandthread.h
 
 FORMS    += mainwindow.ui
+
+LIBS     += -lgphoto2

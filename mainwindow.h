@@ -1,7 +1,10 @@
 #ifndef MAINWINDOW_H
 #define MAINWINDOW_H
 
+#include "pmgphotocommandthread.h"
+
 #include <QMainWindow>
+#include <QComboBox>
 
 namespace Ui {
 class MainWindow;
@@ -17,6 +20,12 @@ public:
     
 private:
     Ui::MainWindow *ui;
+    PMGPhotoCommandThread commandThread;
+    QComboBox cameraSelector;
+
+public slots:
+    void camerasDetected(QList<PMCamera>* cameras);
+    void cameraSelected(int index);
 };
 
 #endif // MAINWINDOW_H
