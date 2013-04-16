@@ -8,7 +8,7 @@ PMGPhotoCommandThread::PMGPhotoCommandThread(QObject *parent) :
     QThread(parent)
 {
     abort = false;
-    detectedCameras = 0;
+    cameras = 0;
     context = 0;
 }
 PMGPhotoCommandThread::~PMGPhotoCommandThread() {
@@ -19,8 +19,8 @@ PMGPhotoCommandThread::~PMGPhotoCommandThread() {
 
     wait();
 
-    if (detectedCameras) {
-        delete detectedCameras;
+    if (cameras) {
+        delete cameras;
     }
     if (context) {
         gp_context_unref(context);
@@ -84,10 +84,10 @@ void PMGPhotoCommandThread::commandAutodetect() {
     count = gp_camera_autodetect(list, context);
 
 
-    if (detectedCameras) {
-        delete detectedCameras;
+    if (cameras) {
+        delete cameras;
     }
-    detectedCameras = new QList<PMCamera>();
+    cameras = new QList<PMCamera>();
 
     std::cout << count << "\n";
     for (int i = 0; i < count; i ++) {
@@ -99,12 +99,12 @@ void PMGPhotoCommandThread::commandAutodetect() {
         camera.value = QString(value);
         camera.cameraNumber = i;
 
-        detectedCameras->append(camera);
+        cameras->append(camera);
     }
 
     gp_list_free(list);
 
-    emit camerasDetected(detectedCameras);
+    emit camerasDetected(cameras);
 }
 
 void PMGPhotoCommandThread::commandOpenCamera(int cameraNumber) {

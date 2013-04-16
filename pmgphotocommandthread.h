@@ -50,7 +50,7 @@ private:
     QQueue<PMCommand> commandQueue;
     bool abort;
     GPContext* context;
-    QList<PMCamera> *detectedCameras;
+    QList<PMCamera> *cameras;
 
 signals:
     void camerasDetected(QList<PMCamera>* camerasDetected);
