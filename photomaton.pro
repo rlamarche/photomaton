@@ -25,4 +25,4 @@ HEADERS  += mainwindow.h \
 
 FORMS    += mainwindow.ui
 
-LIBS     += -lgphoto2
+LIBS     += -lgphoto2_port -lgphoto2

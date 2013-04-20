@@ -12,6 +12,11 @@ void PMGPhotoLiveViewGPhotoThread::stopNow() {
     wait();
 }
 
+void PMGPhotoLiveViewGPhotoThread::restart() {
+    stop = false;
+    start();
+}
+
 void PMGPhotoLiveViewGPhotoThread::run() {
     forever {
         CameraFile *file;
@@ -20,15 +25,15 @@ void PMGPhotoLiveViewGPhotoThread::run() {
 
         int ret = gp_file_new(&file);
         if (ret < GP_OK) {
-            emit cameraError(tr("Erreur de connexion à la caméra", "Impossible d'obtenir une image preview."));
-            return;
+            emit cameraError(tr("Unable to create camera file"), ret);
+            break;
         }
 
         ret = gp_camera_capture_preview(camera->camera, file, context);
         if (ret < GP_OK) {
-            emit cameraError(tr("Erreur de connexion à la caméra", "Impossible de capturer une image"));
+            emit cameraError(tr("Unable to capture preview"), ret);
             gp_file_free(file);
-            return;
+            break;
         }
         if (stop) {
             gp_file_free(file);
@@ -54,4 +59,5 @@ void PMGPhotoLiveViewGPhotoThread::run() {
 
     }
 
+    emit liveViewStopped(camera->cameraNumber);
 }

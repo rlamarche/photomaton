@@ -23,12 +23,21 @@ MainWindow::MainWindow(QWidget *parent) :
     ui->mainToolBar->addWidget(buttonStartLiveView);
     ui->mainToolBar->addWidget(buttonStopLiveView);
 
+    logModel = new QStandardItemModel(this);
+    logModel->setHorizontalHeaderItem(0, new QStandardItem(tr("Date/Heure")));
+    logModel->setHorizontalHeaderItem(1, new QStandardItem(tr("Message")));
+
+    ui->treeView->setModel(logModel);
+
+    ui->treeView->header()->setSectionResizeMode(0, QHeaderView::ResizeToContents);
 
     connect(&commandThread, SIGNAL(camerasDetected(QList<PMCamera*>*)), this, SLOT(camerasDetected(QList<PMCamera*>*)));
     connect(&cameraSelector, SIGNAL(currentIndexChanged(int)), this, SLOT(cameraSelected(int)));
-    connect(&commandThread, SIGNAL(cameraError(QString)), this, SLOT(displayError(QString)));
+    connect(&commandThread, SIGNAL(cameraErrorString(QString)), this, SLOT(displayError(QString)));
     connect(&commandThread, SIGNAL(cameraStatus(QString)), this, SLOT(displayStatus(QString)));
     connect(&commandThread, SIGNAL(liveViewStopped(int)), this, SLOT(liveViewStopped(int)));
+    connect(&commandThread, SIGNAL(newWidget(int,CameraWidget*)), this, SLOT(newWidget(int,CameraWidget*)));
+
     connect(buttonStartLiveView, SIGNAL(clicked()), this, SLOT(startLiveView()));
     connect(buttonStopLiveView, SIGNAL(clicked()), this, SLOT(stopLiveView()));
 
@@ -44,8 +53,33 @@ MainWindow::MainWindow(QWidget *parent) :
     this->ui->graphicsView->scene()->addItem(&preview);
 
 
-    this->ui->autofocusButton->setProperty(PM_PROP_CONFIG_KEY, QVariant("autofocusdrive"));
-    connect(this->ui->autofocusButton, SIGNAL(clicked()), this, SLOT(cameraSetWidgetValue()));
+    cameraWidgets[PM_CONFIG_KEY_AUTOFOCUS_DRIVE] = this->ui->autofocusButton;
+    cameraWidgets[PM_CONFIG_KEY_F_NUMBER] = this->ui->apertureComboBox;
+    cameraWidgets[PM_CONFIG_KEY_SHUTTERSPEED] = this->ui->shutterspeedComboBox;
+
+    configureWidgets();
+}
+
+void MainWindow::configureWidgets() {
+    QList<QString>::iterator i;
+    QList<QString> keys = cameraWidgets.keys();
+
+    for (i = keys.begin(); i != keys.end(); ++ i) {
+        QWidget* widget = cameraWidgets[*i];
+        widget->setDisabled(true);
+
+        widget->setProperty(PM_PROP_CONFIG_KEY, QVariant(*i));
+
+        QComboBox *comboBox = dynamic_cast<QComboBox*>(widget);
+        if (comboBox) {
+            connect(comboBox, SIGNAL(currentIndexChanged(int)), this, SLOT(cameraSetWidgetValue()));
+        }
+        QPushButton *pushButton = dynamic_cast<QPushButton*>(widget);
+        if (pushButton) {
+            connect(pushButton, SIGNAL(clicked()), this, SLOT(cameraSetWidgetValue()));
+
+        }
+    }
 }
 
 MainWindow::~MainWindow()
@@ -97,18 +131,39 @@ void MainWindow::stopLiveView() {
 }
 
 void MainWindow::liveViewStopped(int cameraNumber) {
-    int* value = new int();
-    *value = 0;
-    commandThread.setWidgetValue(cameraNumber, PM_CONFIG_KEY_VIEWFINDER, value);
+
+    PMCommand_SetWidgetValue *value = new PMCommand_SetWidgetValue;
+    value->configKey = PM_CONFIG_KEY_VIEWFINDER;
+    value->valueType = PMCommand_SetWidgetValue::TOGGLE_VALUE;
+    value->toggleValue = 0;
+
+    commandThread.setWidgetValue(cameraNumber, value);
     this->ui->autofocusButton->setDisabled(false);
 }
 
 void MainWindow::displayError(QString message) {
     this->ui->statusBar->showMessage(message);
+
+    addMessage(message);
 }
 
 void MainWindow::displayStatus(QString message) {
     this->ui->statusBar->showMessage(message);
+
+    addMessage(message);
+}
+
+void MainWindow::addMessage(QString message) {
+    QList<QStandardItem *> list;
+
+    QDateTime currentDateTime = QDateTime::currentDateTime();
+
+    list << new QStandardItem(currentDateTime.toString(Qt::SystemLocaleShortDate).append(":").append(currentDateTime.toString("ss")));
+    list << new QStandardItem(message);
+
+    logModel->appendRow(list);
+
+    ui->treeView->scrollTo(logModel->index(logModel->rowCount() - 1, 0));
 }
 
 void MainWindow::displayPreview(CameraFile *cameraFile) {
@@ -149,12 +204,69 @@ void MainWindow::cameraSetWidgetValue() {
         const QString& configKey = sender->property(PM_PROP_CONFIG_KEY).toString();
 
 
-        QPushButton* button = dynamic_cast<QPushButton*>(sender);
+        QPushButton *button = dynamic_cast<QPushButton*>(sender);
         if (button) {
-            int* value = new int();
-            *value = 1;
+            PMCommand_SetWidgetValue *value = new PMCommand_SetWidgetValue;
+            value->configKey = configKey;
+            value->valueType = PMCommand_SetWidgetValue::TOGGLE_VALUE;
+            value->toggleValue = 1;
 
-            commandThread.setWidgetValue(number, configKey, value);
+            commandThread.setWidgetValue(number, value);
+        }
+
+        QComboBox *comboBox = dynamic_cast<QComboBox*>(sender);
+        if (comboBox) {
+            PMCommand_SetWidgetValue *value = new PMCommand_SetWidgetValue;
+            value->configKey = configKey;
+            value->valueType = PMCommand_SetWidgetValue::RADIO_VALUE;
+            value->radioValue = new QString(comboBox->itemData(comboBox->currentIndex()).toString());
+
+            commandThread.setWidgetValue(number, value);
         }
     }
+}
+
+void MainWindow::newWidget(int cameraNumber, CameraWidget *cameraWidget) {
+    const char* label;
+    const char* name;
+    const char* info;
+    int id, ret;
+    ret = gp_widget_get_label(cameraWidget, &label);
+    ret = gp_widget_get_name(cameraWidget, &name);
+    ret = gp_widget_get_id(cameraWidget, &id);
+    ret = gp_widget_get_info(cameraWidget, &info);
+
+    QWidget* widget = cameraWidgets[QString(name)];
+    if (widget) {
+        QComboBox *comboBox = dynamic_cast<QComboBox*>(widget);
+        if (comboBox) {
+            comboBox->blockSignals(true);
+            comboBox->clear();
+            char* currentValue;
+            const char* choiceLabel;
+            gp_widget_get_value(cameraWidget, &currentValue);
+            QString currentValueStr(currentValue);
+
+            int n = gp_widget_count_choices(cameraWidget);
+
+            for (int i = 0; i < n; i ++) {
+                ret = gp_widget_get_choice(cameraWidget, i, &choiceLabel);
+                QString choiceLabelStr(choiceLabel);
+
+                comboBox->addItem(choiceLabelStr, QVariant(choiceLabelStr));
+                if (currentValueStr == choiceLabelStr) {
+                    comboBox->setCurrentIndex(i);
+                }
+            }
+            comboBox->blockSignals(false);
+            comboBox->setDisabled(false);
+        }
+        QPushButton *pushButton = dynamic_cast<QPushButton*>(widget);
+        if (pushButton) {
+            pushButton->setDisabled(false);
+        }
+    }
+
+    //addMessage(tr("New widget : %1 %2 %3 %4").arg(QString().sprintf("%d", id), QString(name), QString(label), QString(info)));
+
 }

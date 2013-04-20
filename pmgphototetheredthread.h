@@ -10,6 +10,8 @@ class PMGPhotoTetheredThread : public QThread
     Q_OBJECT
 public:
     explicit PMGPhotoTetheredThread(GPContext *context, PMCamera *camera);
+    void stopNow();
+    void restart();
 protected:
     void run();
 private:
@@ -17,7 +19,8 @@ private:
     PMCamera *camera;
     bool stop;
 signals:
-    void cameraStatus(QString message);
+    void cameraStatus(const QString& message);
+    void cameraError(const QString& message, int errorCode);
 };
 
 #endif // PMGPHOTOTETHEREDTHREAD_H
