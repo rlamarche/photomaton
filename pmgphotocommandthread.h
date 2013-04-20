@@ -24,11 +24,13 @@ struct PMCommand_SetWidgetValue {
     QString configKey;
     enum {
         TOGGLE_VALUE,
-        RADIO_VALUE
+        RADIO_VALUE,
+        RANGE_VALUE
     } valueType;
     union {
         int toggleValue;
         QString *radioValue;
+        float rangeValue;
     };
 
 };
@@ -97,7 +99,7 @@ private:
 
 signals:
     void camerasDetected(QList<PMCamera*>* camerasDetected);
-    void cameraOpened(PMCamera *camera);
+    void cameraOpened(int cameraNumber);
     void cameraError(QString message, int errorCode);
     void cameraErrorString(QString message);
     void cameraStatus(const QString& message);

@@ -295,10 +295,6 @@ void PMGPhotoCommandThread::commandOpenCamera(int cameraNumber) {
         return;
     }
 
-    emit cameraOpened(camera);
-    emit cameraStatus(QString(tr("Camera successfuly open")));
-
-
     // Look for widgets
     ret = gp_camera_get_config(camera->camera, &camera->window, context);
     if (ret < GP_OK) {
@@ -321,6 +317,10 @@ void PMGPhotoCommandThread::commandOpenCamera(int cameraNumber) {
     connect(camera->tetheredThread, SIGNAL(cameraStatus(QString)), this, SLOT(handleCameraStatus(QString)));
 
    // camera->tetheredThread->start();
+
+    emit cameraOpened(camera->cameraNumber);
+    emit cameraStatus(QString(tr("Camera successfuly open")));
+
 }
 
 void PMGPhotoCommandThread::readWidgetsValue(int cameraNumber) {
@@ -396,6 +396,7 @@ void PMGPhotoCommandThread::commandSetWidgetValue(int cameraNumber, PMCommand_Se
     PMCamera *camera = cameras->at(cameraNumber);
     CameraWidget *widget;
     QString strValue;
+    QString radioValue;
     int ret;
 
     /*
@@ -420,15 +421,16 @@ void PMGPhotoCommandThread::commandSetWidgetValue(int cameraNumber, PMCommand_Se
         break;
 
     case PMCommand_SetWidgetValue::RADIO_VALUE:
-        QString radioValue(*value->radioValue);
+        radioValue = QString(*value->radioValue);
         delete value->radioValue;
         ret = gp_widget_set_value(widget, radioValue.toStdString().c_str());
         strValue = radioValue;
         break;
-/*
-    default:
-        emit cameraError(QString(tr("Not supported value type")), ret);
-        break;*/
+
+    case PMCommand_SetWidgetValue::RANGE_VALUE:
+        ret = gp_widget_set_value(widget, &value->rangeValue);
+        strValue.sprintf("%f", value->rangeValue);
+        break;
     }
 
     if (ret < GP_OK) {
@@ -444,7 +446,7 @@ void PMGPhotoCommandThread::commandSetWidgetValue(int cameraNumber, PMCommand_Se
 
     emit cameraStatus(tr("Set value %1 to %2 successful").arg(value->configKey, strValue));
 
-    readWidgetsValue(cameraNumber);
+    //readWidgetsValue(cameraNumber);
 }
 
 void PMGPhotoCommandThread::handleError(const QString& message, int errorCode) {

@@ -37,6 +37,7 @@ MainWindow::MainWindow(QWidget *parent) :
     connect(&commandThread, SIGNAL(cameraStatus(QString)), this, SLOT(displayStatus(QString)));
     connect(&commandThread, SIGNAL(liveViewStopped(int)), this, SLOT(liveViewStopped(int)));
     connect(&commandThread, SIGNAL(newWidget(int,CameraWidget*)), this, SLOT(newWidget(int,CameraWidget*)));
+    connect(&commandThread, SIGNAL(cameraOpened(int)), this, SLOT(cameraOpened(int)));
 
     connect(buttonStartLiveView, SIGNAL(clicked()), this, SLOT(startLiveView()));
     connect(buttonStopLiveView, SIGNAL(clicked()), this, SLOT(stopLiveView()));
@@ -56,8 +57,10 @@ MainWindow::MainWindow(QWidget *parent) :
     cameraWidgets[PM_CONFIG_KEY_AUTOFOCUS_DRIVE] = this->ui->autofocusButton;
     cameraWidgets[PM_CONFIG_KEY_F_NUMBER] = this->ui->apertureComboBox;
     cameraWidgets[PM_CONFIG_KEY_SHUTTERSPEED] = this->ui->shutterspeedComboBox;
+    cameraWidgets[PM_CONFIG_KEY_MANUALFOCUSDRIVE] = this->ui->manualFocusSlider;
 
     configureWidgets();
+
 }
 
 void MainWindow::configureWidgets() {
@@ -78,6 +81,11 @@ void MainWindow::configureWidgets() {
         if (pushButton) {
             connect(pushButton, SIGNAL(clicked()), this, SLOT(cameraSetWidgetValue()));
 
+        }
+        PMSlider *slider = dynamic_cast<PMSlider*>(widget);
+        if (slider) {
+            connect(slider, SIGNAL(sliderReleased()), this, SLOT(cameraSetWidgetValue()));
+            connect(slider, SIGNAL(keyReleased()), this, SLOT(cameraSetWidgetValue()));
         }
     }
 }
@@ -111,6 +119,11 @@ void MainWindow::cameraSelected(int index) {
 
 }
 
+void MainWindow::cameraOpened(int cameraNumber) {
+    // manual focus works only in liveview, so disable on init
+    ui->manualFocusSlider->setDisabled(true);
+}
+
 void MainWindow::startLiveView() {
     this->ui->autofocusButton->setDisabled(true);
     int currentIndex = cameraSelector.currentIndex();
@@ -118,6 +131,7 @@ void MainWindow::startLiveView() {
         QVariant data = cameraSelector.itemData(currentIndex);
         int number = data.toInt();
         commandThread.startLiveView(number);
+        this->ui->manualFocusSlider->setDisabled(false);
     }
 }
 
@@ -139,6 +153,8 @@ void MainWindow::liveViewStopped(int cameraNumber) {
 
     commandThread.setWidgetValue(cameraNumber, value);
     this->ui->autofocusButton->setDisabled(false);
+    this->ui->manualFocusSlider->setDisabled(true);
+
 }
 
 void MainWindow::displayError(QString message) {
@@ -223,6 +239,16 @@ void MainWindow::cameraSetWidgetValue() {
 
             commandThread.setWidgetValue(number, value);
         }
+        QSlider *slider = dynamic_cast<QSlider*>(sender);
+        if (slider) {
+            PMCommand_SetWidgetValue *value = new PMCommand_SetWidgetValue;
+            value->configKey = configKey;
+            value->valueType = PMCommand_SetWidgetValue::RANGE_VALUE;
+            value->rangeValue = (float) slider->value();
+
+            commandThread.setWidgetValue(number, value);
+
+        }
     }
 }
 
@@ -264,6 +290,27 @@ void MainWindow::newWidget(int cameraNumber, CameraWidget *cameraWidget) {
         QPushButton *pushButton = dynamic_cast<QPushButton*>(widget);
         if (pushButton) {
             pushButton->setDisabled(false);
+        }
+
+        QSlider *slider = dynamic_cast<QSlider*>(widget);
+        if (slider) {
+            slider->blockSignals(true);
+            float min, max, increment;
+            float value;
+
+            ret = gp_widget_get_range(cameraWidget, &min, &max, &increment);
+            ret = gp_widget_get_value(cameraWidget, &value);
+
+            slider->setMinimum((int) min);
+            slider->setMaximum((int) max);
+            slider->setSingleStep((int) increment);
+            slider->setPageStep((int)increment * 10);
+
+
+            slider->setValue((int)  value);
+
+            slider->blockSignals(false);
+            slider->setDisabled(false);
         }
     }
 

@@ -20,6 +20,7 @@
 #define PM_CONFIG_KEY_VIEWFINDER "viewfinder"
 #define PM_CONFIG_KEY_F_NUMBER "f-number"
 #define PM_CONFIG_KEY_SHUTTERSPEED "shutterspeed"
+#define PM_CONFIG_KEY_MANUALFOCUSDRIVE "manualfocusdrive"
 
 namespace Ui {
 class MainWindow;
@@ -48,6 +49,7 @@ private:
 public slots:
     void camerasDetected(QList<PMCamera*>* cameras);
     void cameraSelected(int index);
+    void cameraOpened(int cameraNumber);
     void startLiveView();
     void stopLiveView();
     void liveViewStopped(int cameraNumber);
