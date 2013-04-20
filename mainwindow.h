@@ -10,6 +10,12 @@
 
 #include <gphoto2/gphoto2-camera.h>
 
+#define PM_PROP_CONFIG_KEY "configKey"
+
+
+#define PM_CONFIG_KEY_AUTOFOCUS_DRIVE "autofocusdrive"
+#define PM_CONFIG_KEY_VIEWFINDER "viewfinder"
+
 namespace Ui {
 class MainWindow;
 }
@@ -32,9 +38,12 @@ public slots:
     void camerasDetected(QList<PMCamera*>* cameras);
     void cameraSelected(int index);
     void startLiveView();
+    void stopLiveView();
+    void liveViewStopped(int cameraNumber);
     void displayError(QString message);
     void displayStatus(QString message);
     void displayPreview(CameraFile *cameraFile);
+    void cameraSetWidgetValue();
 };
 
 #endif // MAINWINDOW_H

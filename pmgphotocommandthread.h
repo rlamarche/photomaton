@@ -15,7 +15,9 @@
 enum PMCommandType {
     AUTODETECT_CAMERAS,
     OPEN_CAMERA,
-    START_LIVEVIEW
+    START_LIVEVIEW,
+    STOP_LIVEVIEW,
+    SET_WIDGET_VALUE
 };
 
 struct PMCommand {
@@ -23,29 +25,24 @@ struct PMCommand {
     void* args;
 };
 
+
+
+struct PMCommand_SetWidgetValue_Args {
+    int cameraNumber;
+    QString configKey;
+    void *value;
+};
+
+class PMGPhotoLiveViewGPhotoThread;
+class PMGPhotoTetheredThread;
+
 struct PMCamera {
     int cameraNumber;
     QString model;
     QString port;
     Camera *camera;
-    bool liveview;
-};
-
-class PMLiveViewGPhotoThread : public QThread {
-    Q_OBJECT
-public:
-    explicit PMLiveViewGPhotoThread(GPContext *context, PMCamera *camera);
-   // ~PMGPhotoCommandThread();
-    void stopNow();
-protected:
-    void run();
-private:
-    GPContext *context;
-    PMCamera *camera;
-    bool stop;
-signals:
-    void previewAvailable(CameraFile *cameraFile);
-    void cameraError(QString message);
+    PMGPhotoLiveViewGPhotoThread* liveviewThread;
+    PMGPhotoTetheredThread* tetheredThread;
 };
 
 class PMGPhotoCommandThread : public QThread
@@ -58,6 +55,8 @@ public:
     void autodetect();
     void openCamera(int cameraNumber);
     void startLiveView(int cameraNumber);
+    void stopLiveView(int cameraNumber);
+    void setWidgetValue(int cameraNumber, const QString& configKey, const void* value);
 
 protected:
     void run();
@@ -66,6 +65,8 @@ private:
     void commandAutodetect();
     void commandOpenCamera(int cameraNumber);
     void commandStartLiveView(int cameraNumber);
+    void commandStopLiveView(int cameraNumber);
+    void commandSetWidgetValue(int cameraNumber, const QString& configKey, const void* value);
 
     QMutex mutex;
     QWaitCondition condition;
@@ -73,7 +74,6 @@ private:
     bool abort;
     GPContext* context;
     QList<PMCamera*> *cameras;
-    QList<PMLiveViewGPhotoThread*> liveviewThreads;
 
     CameraAbilitiesList      *abilitieslist;
     GPPortInfoList           *portinfolist;
@@ -84,6 +84,8 @@ signals:
     void cameraError(QString message);
     void cameraStatus(QString message);
     void previewAvailable(CameraFile *cameraFile);
+    void liveViewStarted(int cameraNumber);
+    void liveViewStopped(int cameraNumber);
 public slots:
     void liveViewError(QString message);
     void handlePreview(CameraFile *cameraFile);

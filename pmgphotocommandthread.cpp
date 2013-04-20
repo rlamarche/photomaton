@@ -1,4 +1,5 @@
 #include "pmgphotocommandthread.h"
+#include "pmgphotoliveviewgphotothread.h"
 
 #include <QMessageBox>
 
@@ -14,59 +15,6 @@ PMGPhotoCommandThread::PMGPhotoCommandThread(QObject *parent) :
     portinfolist = 0;
 }
 
-PMLiveViewGPhotoThread::PMLiveViewGPhotoThread(GPContext *context, PMCamera *camera) :
-    QThread(0), context(context), camera(camera)
-
-{
-    stop = false;
-}
-
-void PMLiveViewGPhotoThread::stopNow() {
-    stop = true;
-    wait();
-}
-
-void PMLiveViewGPhotoThread::run() {
-    forever {
-        if (stop) {
-            break;
-        }
-        CameraFile *file;
-        //unsigned long int size;
-        //const char *data;
-
-        int ret = gp_file_new(&file);
-        if (ret < GP_OK) {
-            emit cameraError(tr("Erreur de connexion à la caméra", "Impossible d'obtenir une image preview."));
-            return;
-        }
-
-        ret = gp_camera_capture_preview(camera->camera, file, context);
-        if (ret < GP_OK) {
-            emit cameraError(tr("Erreur de connexion à la caméra", "Impossible de capturer une image"));
-            return;
-        }
-
-        emit previewAvailable(file);
-    /*
-        printf("%d", size);
-
-        QFile qfile("/tmp/out.jpg");
-        qfile.open(QIODevice::WriteOnly);
-
-        qfile.write(data, size);
-        qfile.close();
-    */
-        /*if (!pixmap.loadFromData((uchar*) data, size, "JPG")) {
-            QMessageBox::critical(this, "Erreur de connexion à la caméra", "Impossible de lire les données renvoyées par la caméra.");
-            return;
-        }*/
-
-        //this->ui->widget->update();
-
-    }
-
-}
 
 PMGPhotoCommandThread::~PMGPhotoCommandThread() {
     mutex.lock();
@@ -81,18 +29,15 @@ PMGPhotoCommandThread::~PMGPhotoCommandThread() {
         for (i = cameras->begin(); i != cameras->end(); ++i) {
             PMCamera* camera = *i;
 
+            if (camera->liveviewThread) {
+                camera->liveviewThread->stopNow();
+                delete camera->liveviewThread;
+            }
             gp_camera_unref(camera->camera);
             delete camera;
         }
 
         delete cameras;
-    }
-
-    QList<PMLiveViewGPhotoThread*>::iterator t;
-    for (t = liveviewThreads.begin(); t != liveviewThreads.end(); ++t) {
-        PMLiveViewGPhotoThread *thread = (*t);
-        thread->stopNow();
-        delete thread;
     }
 
     if (abilitieslist) {
@@ -128,16 +73,27 @@ void PMGPhotoCommandThread::run() {
 
         if (!empty) {
             switch (command.type) {
-                case AUTODETECT_CAMERAS:
-                    commandAutodetect();
+            case AUTODETECT_CAMERAS:
+                commandAutodetect();
                 break;
-                case OPEN_CAMERA:
-                    commandOpenCamera(*((int*) command.args));
+            case OPEN_CAMERA:
+                commandOpenCamera(*((int*) command.args));
+                delete (int*) command.args;
                 break;
-                case START_LIVEVIEW:
-                    commandStartLiveView(*((int*) command.args));
+            case START_LIVEVIEW:
+                commandStartLiveView(*((int*) command.args));
+                delete (int*) command.args;
                 break;
-                }
+            case STOP_LIVEVIEW:
+                commandStopLiveView(*((int*) command.args));
+                delete (int*) command.args;
+                break;
+            case SET_WIDGET_VALUE:
+                PMCommand_SetWidgetValue_Args *args = (PMCommand_SetWidgetValue_Args*) command.args;
+                commandSetWidgetValue(args->cameraNumber, args->configKey, args->value);
+                delete args;
+                break;
+            }
         }
 
         mutex.lock();
@@ -182,6 +138,36 @@ void PMGPhotoCommandThread::startLiveView(int cameraNumber) {
     condition.wakeOne();
 }
 
+void PMGPhotoCommandThread::stopLiveView(int cameraNumber) {
+    QMutexLocker locker(&mutex);
+
+    PMCommand command;
+    command.type = STOP_LIVEVIEW;
+    int* arg = new int;
+    *arg = cameraNumber;
+    command.args = arg;
+
+    commandQueue.append(command);
+    condition.wakeOne();
+}
+
+void PMGPhotoCommandThread::setWidgetValue(int cameraNumber, const QString &configKey, const void* value) {
+    QMutexLocker locker(&mutex);
+
+    PMCommand command;
+    PMCommand_SetWidgetValue_Args *args = new PMCommand_SetWidgetValue_Args();
+
+    args->cameraNumber = cameraNumber;
+    args->configKey = configKey;
+    args->value = (void*) value;
+
+    command.type = SET_WIDGET_VALUE;
+    command.args = args;
+
+    commandQueue.append(command);
+    condition.wakeOne();
+}
+
 void PMGPhotoCommandThread::commandAutodetect() {
     int count;
     CameraList *list;
@@ -220,7 +206,7 @@ void PMGPhotoCommandThread::commandAutodetect() {
         camera->model = QString(name);
         camera->port = QString(value);
         camera->cameraNumber = i;
-        camera->liveview = false;
+        camera->liveviewThread = 0;
 
         cameras->append(camera);
     }
@@ -231,11 +217,11 @@ void PMGPhotoCommandThread::commandAutodetect() {
 }
 
 static int _lookup_widget(CameraWidget*widget, const char *key, CameraWidget **child) {
-        int ret;
-        ret = gp_widget_get_child_by_name (widget, key, child);
-        if (ret < GP_OK)
-                ret = gp_widget_get_child_by_label (widget, key, child);
-        return ret;
+    int ret;
+    ret = gp_widget_get_child_by_name (widget, key, child);
+    if (ret < GP_OK)
+        ret = gp_widget_get_child_by_label (widget, key, child);
+    return ret;
 }
 
 void PMGPhotoCommandThread::commandOpenCamera(int cameraNumber) {
@@ -294,18 +280,60 @@ void PMGPhotoCommandThread::commandOpenCamera(int cameraNumber) {
 void PMGPhotoCommandThread::commandStartLiveView(int cameraNumber) {
     PMCamera *camera = cameras->at(cameraNumber);
 
-    if (!camera->liveview) {
-        PMLiveViewGPhotoThread *liveviewthread = new PMLiveViewGPhotoThread(context, cameras->at(cameraNumber));
+    if (!camera->liveviewThread) {
+        PMGPhotoLiveViewGPhotoThread *liveviewthread = new PMGPhotoLiveViewGPhotoThread(context, cameras->at(cameraNumber));
+        camera->liveviewThread = liveviewthread;
 
         connect(liveviewthread, SIGNAL(cameraError(QString)), this, SLOT(liveViewError(QString)));
         connect(liveviewthread, SIGNAL(previewAvailable(CameraFile*)), this, SLOT(handlePreview(CameraFile*)));
 
-        liveviewThreads.append(liveviewthread);
-
         liveviewthread->start();
-
-        camera->liveview = true;
+        emit liveViewStarted(cameraNumber);
     }
+}
+
+void PMGPhotoCommandThread::commandStopLiveView(int cameraNumber) {
+    PMCamera *camera = cameras->at(cameraNumber);
+
+    if (camera->liveviewThread) {
+        camera->liveviewThread->stopNow();
+        delete camera->liveviewThread;
+        camera->liveviewThread = 0;
+        emit liveViewStopped(cameraNumber);
+    }
+}
+
+void PMGPhotoCommandThread::commandSetWidgetValue(int cameraNumber, const QString &configKey, const void* value) {
+    PMCamera *camera = cameras->at(cameraNumber);
+    CameraWidget *rootWidget, *widget;
+    int ret;
+
+    ret = gp_camera_get_config(camera->camera, &rootWidget, context);
+    if (ret < GP_OK) {
+        emit cameraError(QString(tr("Unable to get root widget")));
+        return;
+    }
+
+    ret = gp_widget_get_child_by_name (rootWidget, configKey.toStdString().c_str(), &widget);
+    if (ret < GP_OK) {
+        emit cameraError(QString(tr("Unable to get widget for config key")).append(configKey));
+        return;
+    }
+
+
+    ret = gp_widget_set_value(widget, value);
+    if (ret < GP_OK) {
+        emit cameraError(QString(tr("Unable to set camera value")));
+        return;
+    }
+
+    ret = gp_camera_set_config(camera->camera, rootWidget, context);
+    if (ret < GP_OK) {
+        emit cameraError(QString(tr("Unable to set camera config")));
+        return;
+    }
+
+    delete value;
 }
 
 void PMGPhotoCommandThread::liveViewError(QString message) {

@@ -14,10 +14,14 @@ TEMPLATE = app
 
 SOURCES += main.cpp\
         mainwindow.cpp \
-    pmgphotocommandthread.cpp
+    pmgphotocommandthread.cpp \
+    pmgphototetheredthread.cpp \
+    pmgphotoliveviewgphotothread.cpp
 
 HEADERS  += mainwindow.h \
-    pmgphotocommandthread.h
+    pmgphotocommandthread.h \
+    pmgphototetheredthread.h \
+    pmgphotoliveviewgphotothread.h
 
 FORMS    += mainwindow.ui
 

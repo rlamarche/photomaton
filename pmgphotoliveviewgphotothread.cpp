@@ -1,0 +1,57 @@
+#include "pmgphotoliveviewgphotothread.h"
+
+PMGPhotoLiveViewGPhotoThread::PMGPhotoLiveViewGPhotoThread(GPContext *context, PMCamera *camera) :
+    QThread(0), context(context), camera(camera)
+
+{
+    stop = false;
+}
+
+void PMGPhotoLiveViewGPhotoThread::stopNow() {
+    stop = true;
+    wait();
+}
+
+void PMGPhotoLiveViewGPhotoThread::run() {
+    forever {
+        CameraFile *file;
+        //unsigned long int size;
+        //const char *data;
+
+        int ret = gp_file_new(&file);
+        if (ret < GP_OK) {
+            emit cameraError(tr("Erreur de connexion à la caméra", "Impossible d'obtenir une image preview."));
+            return;
+        }
+
+        ret = gp_camera_capture_preview(camera->camera, file, context);
+        if (ret < GP_OK) {
+            emit cameraError(tr("Erreur de connexion à la caméra", "Impossible de capturer une image"));
+            gp_file_free(file);
+            return;
+        }
+        if (stop) {
+            gp_file_free(file);
+            break;
+        }
+
+        emit previewAvailable(file);
+        /*
+        printf("%d", size);
+
+        QFile qfile("/tmp/out.jpg");
+        qfile.open(QIODevice::WriteOnly);
+
+        qfile.write(data, size);
+        qfile.close();
+    */
+        /*if (!pixmap.loadFromData((uchar*) data, size, "JPG")) {
+            QMessageBox::critical(this, "Erreur de connexion à la caméra", "Impossible de lire les données renvoyées par la caméra.");
+            return;
+        }*/
+
+        //this->ui->widget->update();
+
+    }
+
+}
