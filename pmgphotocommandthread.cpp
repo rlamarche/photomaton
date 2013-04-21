@@ -19,6 +19,15 @@ PMGPhotoCommandThread::PMGPhotoCommandThread(QObject *parent) :
     connect(this, SIGNAL(cameraError(QString,int)), this, SLOT(handleError(QString,int)));
 }
 
+void PMGPhotoCommandThread::stopNow() {
+    mutex.lock();
+    abort = true;
+    condition.wakeOne();
+    mutex.unlock();
+
+    wait();
+}
+
 
 PMGPhotoCommandThread::~PMGPhotoCommandThread() {
     mutex.lock();
@@ -111,6 +120,9 @@ void PMGPhotoCommandThread::run() {
                 commandSetWidgetValue(command.cameraNumber, command.widgetValue);
                 delete command.widgetValue;
                 break;
+            case UPDATE_WIDGETS:
+                commandUpdateWidgets(command.cameraNumber);
+                break;
             }
         }
 
@@ -182,6 +194,18 @@ void PMGPhotoCommandThread::setWidgetValue(int cameraNumber, PMCommand_SetWidget
     command.type = SET_WIDGET_VALUE;
     command.cameraNumber = cameraNumber;
     command.widgetValue = value;
+
+    commandQueue.append(command);
+    condition.wakeOne();
+}
+
+void PMGPhotoCommandThread::updateWidgets(int cameraNumber) {
+    QMutexLocker locker(&mutex);
+
+    PMCommand command;
+
+    command.type = UPDATE_WIDGETS;
+    command.cameraNumber = cameraNumber;
 
     commandQueue.append(command);
     condition.wakeOne();
@@ -296,6 +320,7 @@ void PMGPhotoCommandThread::commandOpenCamera(int cameraNumber) {
     }
 
     // Look for widgets
+    emit startListingWidgets(camera->cameraNumber);
     ret = gp_camera_get_config(camera->camera, &camera->window, context);
     if (ret < GP_OK) {
         emit cameraError(tr("Unable to get root widget"), ret);
@@ -323,7 +348,7 @@ void PMGPhotoCommandThread::commandOpenCamera(int cameraNumber) {
 
 }
 
-void PMGPhotoCommandThread::readWidgetsValue(int cameraNumber) {
+void PMGPhotoCommandThread::commandUpdateWidgets(int cameraNumber) {
     PMCamera* camera = cameras->at(cameraNumber);
 
     if (camera->window) {
@@ -446,7 +471,7 @@ void PMGPhotoCommandThread::commandSetWidgetValue(int cameraNumber, PMCommand_Se
 
     emit cameraStatus(tr("Set value %1 to %2 successful").arg(value->configKey, strValue));
 
-    //readWidgetsValue(cameraNumber);
+    //updateWidgets(cameraNumber);
 }
 
 void PMGPhotoCommandThread::handleError(const QString& message, int errorCode) {

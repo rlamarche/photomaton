@@ -14,7 +14,7 @@
 #include <gphoto2/gphoto2-camera.h>
 
 #define PM_PROP_CONFIG_KEY "configKey"
-
+#define PM_PROP_OFFSET "offset"
 
 #define PM_CONFIG_KEY_AUTOFOCUS_DRIVE "autofocusdrive"
 #define PM_CONFIG_KEY_VIEWFINDER "viewfinder"
@@ -39,10 +39,10 @@ private:
     void configureWidgets();
 
     Ui::MainWindow *ui;
-    PMGPhotoCommandThread commandThread;
+    PMGPhotoCommandThread *commandThread;
     QComboBox cameraSelector;
-    QGraphicsPixmapItem preview;
     QStandardItemModel *logModel;
+    QStandardItemModel *infosModel;
     QMap<QString, QWidget*> cameraWidgets;
 
 
@@ -52,11 +52,12 @@ public slots:
     void cameraOpened(int cameraNumber);
     void startLiveView();
     void stopLiveView();
+    void manualFocusDrive();
     void liveViewStopped(int cameraNumber);
     void displayError(QString message);
     void displayStatus(QString message);
-    void displayPreview(CameraFile *cameraFile);
     void cameraSetWidgetValue();
+    void startListingWidgets(int cameraNumber);
     void newWidget(int cameraNumber, CameraWidget* widget);
 };
 

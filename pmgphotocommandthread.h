@@ -17,7 +17,8 @@ enum PMCommandType {
     OPEN_CAMERA,
     START_LIVEVIEW,
     STOP_LIVEVIEW,
-    SET_WIDGET_VALUE
+    SET_WIDGET_VALUE,
+    UPDATE_WIDGETS
 };
 
 struct PMCommand_SetWidgetValue {
@@ -74,7 +75,8 @@ public:
     void startLiveView(int cameraNumber);
     void stopLiveView(int cameraNumber);
     void setWidgetValue(int cameraNumber, PMCommand_SetWidgetValue *value);
-    void readWidgetsValue(int cameraNumber);
+    void updateWidgets(int cameraNumber);
+    void stopNow();
 
 protected:
     void run();
@@ -86,6 +88,7 @@ private:
     void commandStartLiveView(int cameraNumber);
     void commandStopLiveView(int cameraNumber);
     void commandSetWidgetValue(int cameraNumber, PMCommand_SetWidgetValue* value);
+    void commandUpdateWidgets(int cameraNumber);
 
     QMutex mutex;
     QWaitCondition condition;
@@ -106,6 +109,7 @@ signals:
     void previewAvailable(CameraFile *cameraFile);
     void liveViewStarted(int cameraNumber);
     void liveViewStopped(int cameraNumber);
+    void startListingWidgets(int cameraNumber);
     void newWidget(int cameraNumber, CameraWidget* cameraWidget);
 public slots:
     void handleError(const QString& message, int errorCode);

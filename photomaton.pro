@@ -17,13 +17,15 @@ SOURCES += main.cpp\
     pmgphotocommandthread.cpp \
     pmgphototetheredthread.cpp \
     pmgphotoliveviewgphotothread.cpp \
-    pmslider.cpp
+    pmslider.cpp \
+    pmgraphicsview.cpp
 
 HEADERS  += mainwindow.h \
     pmgphotocommandthread.h \
     pmgphototetheredthread.h \
     pmgphotoliveviewgphotothread.h \
-    pmslider.h
+    pmslider.h \
+    pmgraphicsview.h
 
 FORMS    += mainwindow.ui
 
